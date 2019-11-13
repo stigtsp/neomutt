@@ -350,6 +350,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
   if (!m)
     return -1;
 
+  mutt_debug(LL_DEBUG1, "start\n");
   struct MboxAccountData *adata = mbox_adata_get(m);
   if (!adata)
     return -1;
@@ -365,6 +366,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
   /* Save information about the folder at the time we opened it. */
   if (stat(mailbox_path(m), &sb) == -1)
   {
+    mutt_debug(LL_DEBUG1, "stat\n");
     mutt_perror(mailbox_path(m));
     return -1;
   }
@@ -394,10 +396,13 @@ static int mbox_parse_mailbox(struct Mailbox *m)
   }
 
   loc = ftello(adata->fp);
+  mutt_debug(LL_DEBUG1, "while\n");
   while ((fgets(buf, sizeof(buf), adata->fp)) && (SigInt != 1))
   {
+    mutt_debug(LL_DEBUG1, "loop1\n");
     if (is_from(buf, return_path, sizeof(return_path), &t))
     {
+      mutt_debug(LL_DEBUG1, "from\n");
       /* Save the Content-Length of the previous message */
       if (count > 0)
       {
@@ -429,6 +434,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
       e_cur->offset = loc;
       e_cur->index = m->msg_count;
 
+      mutt_debug(LL_DEBUG1, "header\n");
       e_cur->env = mutt_rfc822_read_header(adata->fp, e_cur, false, false);
 
       /* if we know how long this message is, either just skip over the body,
@@ -436,6 +442,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
        * save time by not having to search for the next message marker).  */
       if (e_cur->content->length > 0)
       {
+        mutt_debug(LL_DEBUG1, "known length\n");
         LOFF_T tmploc;
 
         loc = ftello(adata->fp);
@@ -464,12 +471,14 @@ static int mbox_parse_mailbox(struct Mailbox *m)
             }
             e_cur->content->length = -1;
           }
+          mutt_debug(LL_DEBUG1, "valid\n");
         }
         else if (tmploc != m->size)
         {
           /* content-length would put us past the end of the file, so it
            * must be wrong */
           e_cur->content->length = -1;
+          mutt_debug(LL_DEBUG1, "wrong\n");
         }
 
         if (e_cur->content->length != -1)
@@ -483,6 +492,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
             /* count the number of lines in this message */
             if ((loc < 0) || (fseeko(adata->fp, loc, SEEK_SET) != 0))
               mutt_debug(LL_DEBUG1, "#2 fseek() failed\n");
+            mutt_debug(LL_DEBUG1, "count\n");
             while (cl-- > 0)
             {
               if (fgetc(adata->fp) == '\n')
@@ -500,11 +510,15 @@ static int mbox_parse_mailbox(struct Mailbox *m)
 
       if (TAILQ_EMPTY(&e_cur->env->return_path) && return_path[0])
       {
+        mutt_debug(LL_DEBUG1, "parse addrs\n");
         mutt_addrlist_parse(&e_cur->env->return_path, return_path);
       }
 
       if (TAILQ_EMPTY(&e_cur->env->from))
+      {
+        mutt_debug(LL_DEBUG1, "parse from\n");
         mutt_addrlist_copy(&e_cur->env->from, &e_cur->env->return_path, false);
+      }
 
       lines = 0;
     }
@@ -513,6 +527,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
 
     loc = ftello(adata->fp);
   }
+  mutt_debug(LL_DEBUG1, "while done\n");
 
   /* Only set the content-length of the previous message if we have read more
    * than one message during _this_ invocation.  If this routine is called
@@ -520,6 +535,7 @@ static int mbox_parse_mailbox(struct Mailbox *m)
    * previously was the last message since the headers may be sorted.  */
   if (count > 0)
   {
+    mutt_debug(LL_DEBUG1, "%d messages\n", count);
     struct Email *e = m->emails[m->msg_count - 1];
     if (e->content->length < 0)
     {
@@ -535,9 +551,11 @@ static int mbox_parse_mailbox(struct Mailbox *m)
   if (SigInt == 1)
   {
     SigInt = 0;
+    mutt_debug(LL_DEBUG1, "aborted\n");
     return -2; /* action aborted */
   }
 
+  mutt_debug(LL_DEBUG1, "done\n");
   return 0;
 }
 
@@ -934,6 +952,7 @@ static FILE *mbox_open_readonly(struct Mailbox *m)
  */
 static int mbox_mbox_open(struct Mailbox *m)
 {
+  mutt_debug(LL_DEBUG1, "start\n");
   if (init_mailbox(m) != 0)
     return -1;
 
@@ -941,27 +960,35 @@ static int mbox_mbox_open(struct Mailbox *m)
   if (!adata)
     return -1;
 
+  mutt_debug(LL_DEBUG1, "rw\n");
   adata->fp = mbox_open_readwrite(m);
   if (!adata->fp)
   {
+    mutt_debug(LL_DEBUG1, "ro\n");
     adata->fp = mbox_open_readonly(m);
   }
   if (!adata->fp)
   {
     mutt_perror(mailbox_path(m));
+    mutt_debug(LL_DEBUG1, "failed\n");
     return -1;
   }
 
   mutt_sig_block();
+  mutt_debug(LL_DEBUG1, "lock\n");
   if (mbox_lock_mailbox(m, false, true) == -1)
   {
+    mutt_debug(LL_DEBUG1, "failed2\n");
     mutt_sig_unblock();
     return -1;
   }
 
   int rc;
   if (m->magic == MUTT_MBOX)
+  {
+    mutt_debug(LL_DEBUG1, "parse\n");
     rc = mbox_parse_mailbox(m);
+  }
   else if (m->magic == MUTT_MMDF)
     rc = mmdf_parse_mailbox(m);
   else
@@ -971,6 +998,7 @@ static int mbox_mbox_open(struct Mailbox *m)
 
   mbox_unlock_mailbox(m);
   mutt_sig_unblock();
+  mutt_debug(LL_DEBUG1, "done\n");
   return rc;
 }
 
@@ -1024,15 +1052,18 @@ static int mbox_mbox_open_append(struct Mailbox *m, OpenMailboxFlags flags)
  */
 static int mbox_mbox_check(struct Mailbox *m, int *index_hint)
 {
+  mutt_debug(LL_DEBUG1, "start\n");
   if (!m)
     return -1;
 
+  mutt_debug(LL_DEBUG1, "adata\n");
   struct MboxAccountData *adata = mbox_adata_get(m);
   if (!adata)
     return -1;
 
   if (!adata->fp)
   {
+    mutt_debug(LL_DEBUG1, "open\n");
     if (mbox_mbox_open(m) < 0)
       return -1;
     mailbox_changed(m, MBN_INVALID);
@@ -1042,11 +1073,13 @@ static int mbox_mbox_check(struct Mailbox *m, int *index_hint)
   bool unlock = false;
   bool modified = false;
 
+  mutt_debug(LL_DEBUG1, "stat\n");
   if (stat(mailbox_path(m), &st) == 0)
   {
     if ((mutt_file_stat_timespec_compare(&st, MUTT_STAT_MTIME, &m->mtime) == 0) &&
         (st.st_size == m->size))
     {
+      mutt_debug(LL_DEBUG1, "no change\n");
       return 0;
     }
 
@@ -1054,21 +1087,25 @@ static int mbox_mbox_check(struct Mailbox *m, int *index_hint)
     {
       /* the file was touched, but it is still the same length, so just exit */
       mutt_file_get_stat_timespec(&m->mtime, &st, MUTT_STAT_MTIME);
+      mutt_debug(LL_DEBUG1, "same length\n");
       return 0;
     }
 
     if (st.st_size > m->size)
     {
+      mutt_debug(LL_DEBUG1, "bigger\n");
       /* lock the file if it isn't already */
       if (!adata->locked)
       {
         mutt_sig_block();
+        mutt_debug(LL_DEBUG1, "lock\n");
         if (mbox_lock_mailbox(m, false, false) == -1)
         {
           mutt_sig_unblock();
           /* we couldn't lock the mailbox, but nothing serious happened:
            * probably the new mail arrived: no reason to wait till we can
            * parse it: we'll get it on the next pass */
+          mutt_debug(LL_DEBUG1, "lock failed\n");
           return MUTT_LOCKED;
         }
         unlock = 1;
@@ -1081,17 +1118,22 @@ static int mbox_mbox_check(struct Mailbox *m, int *index_hint)
       char buf[1024];
       if (fseeko(adata->fp, m->size, SEEK_SET) != 0)
         mutt_debug(LL_DEBUG1, "#1 fseek() failed\n");
+      mutt_debug(LL_DEBUG1, "fgets\n");
       if (fgets(buf, sizeof(buf), adata->fp))
       {
         if (((m->magic == MUTT_MBOX) && mutt_str_startswith(buf, "From ", CASE_MATCH)) ||
             ((m->magic == MUTT_MMDF) && (mutt_str_strcmp(buf, MMDF_SEP) == 0)))
         {
+          mutt_debug(LL_DEBUG1, "from\n");
           if (fseeko(adata->fp, m->size, SEEK_SET) != 0)
             mutt_debug(LL_DEBUG1, "#2 fseek() failed\n");
 
           int old_msg_count = m->msg_count;
           if (m->magic == MUTT_MBOX)
+          {
+            mutt_debug(LL_DEBUG1, "parse\n");
             mbox_parse_mailbox(m);
+          }
           else
             mmdf_parse_mailbox(m);
 
@@ -1103,14 +1145,19 @@ static int mbox_mbox_check(struct Mailbox *m, int *index_hint)
            * mutt_checkpoint_mailbox().  */
           if (unlock)
           {
+            mutt_debug(LL_DEBUG1, "unlock\n");
             mbox_unlock_mailbox(m);
             mutt_sig_unblock();
           }
 
+          mutt_debug(LL_DEBUG1, "MUTT_NEW_MAIL\n");
           return MUTT_NEW_MAIL; /* signal that new mail arrived */
         }
         else
+        {
+          mutt_debug(LL_DEBUG1, "modified\n");
           modified = true;
+        }
       }
       else
       {
@@ -1119,26 +1166,35 @@ static int mbox_mbox_check(struct Mailbox *m, int *index_hint)
       }
     }
     else
+    {
+      mutt_debug(LL_DEBUG1, "modified2\n");
       modified = true;
+    }
   }
 
   if (modified)
   {
+    mutt_debug(LL_DEBUG1, "reopen\n");
     if (reopen_mailbox(m, index_hint) != -1)
     {
+      mutt_debug(LL_DEBUG1, "changed\n");
       mailbox_changed(m, MBN_INVALID);
       if (unlock)
       {
+        mutt_debug(LL_DEBUG1, "unlock2\n");
         mbox_unlock_mailbox(m);
         mutt_sig_unblock();
       }
+      mutt_debug(LL_DEBUG1, "MUTT_REOPENED\n");
       return MUTT_REOPENED;
     }
   }
 
   /* fatal error */
 
+  mutt_debug(LL_DEBUG1, "fatal\n");
   mbox_unlock_mailbox(m);
+  mutt_debug(LL_DEBUG1, "fastclose\n");
   mx_fastclose_mailbox(m);
   mutt_sig_unblock();
   mutt_error(_("Mailbox was corrupted"));

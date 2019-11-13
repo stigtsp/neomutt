@@ -1150,6 +1150,7 @@ int mutt_index_menu(void)
                        0;
 
       check = mx_mbox_check(Context->mailbox, &index_hint);
+      mutt_debug(LL_DEBUG1, "CHECK0, [%d] %p, %p, %s\n", check, Context, Context ? Context->mailbox : NULL, Context->mailbox ? mailbox_path(Context->mailbox) : "");
       if (check < 0)
       {
         if (!Context->mailbox || (mutt_buffer_is_empty(&Context->mailbox->pathbuf)))
@@ -1163,6 +1164,7 @@ int mutt_index_menu(void)
       }
       else if ((check == MUTT_NEW_MAIL) || (check == MUTT_REOPENED) || (check == MUTT_FLAGS))
       {
+        mutt_debug(LL_DEBUG1, "CHECK1, %p, %p, %s\n", Context, Context ? Context->mailbox : NULL, Context->mailbox ? mailbox_path(Context->mailbox) : "");
         /* notify the user of new mail */
         if (check == MUTT_REOPENED)
         {
@@ -1195,6 +1197,7 @@ int mutt_index_menu(void)
         /* avoid the message being overwritten by mailbox */
         do_mailbox_notify = false;
 
+        mutt_debug(LL_DEBUG1, "CHECK2, %p, %p, %s\n", Context, Context ? Context->mailbox : NULL, Context->mailbox ? mailbox_path(Context->mailbox) : "");
         if (Context && Context->mailbox)
         {
           bool q = Context->mailbox->quiet;

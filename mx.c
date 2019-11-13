@@ -1036,7 +1036,9 @@ int mx_mbox_check(struct Mailbox *m, int *index_hint)
   if (!m || !m->mx_ops)
     return -1;
 
+  mutt_debug(LL_DEBUG1, "mx_mbox_check: %s\n", m->mx_ops->name);
   int rc = m->mx_ops->mbox_check(m, index_hint);
+  mutt_debug(LL_DEBUG1, "mx_mbox_check: %d\n", rc);
   if ((rc == MUTT_NEW_MAIL) || (rc == MUTT_REOPENED))
     mailbox_changed(m, MBN_INVALID);
 
